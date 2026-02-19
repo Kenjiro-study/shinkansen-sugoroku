@@ -5,7 +5,7 @@ import random
 # ページ設定
 st.set_page_config(page_title="新幹線すごろく", layout="wide")
 
-# CSS調整（優勝者表示用のスタイルを追加）
+# CSS調整
 st.markdown("""
     <style>
     .big-font { font-size:24px !important; font-weight:bold; }
@@ -24,6 +24,12 @@ st.markdown("""
         margin-bottom: 20px;
         animation: pulse 2s infinite;
     }
+    .score-detail {
+        background-color: #f0f2f6;
+        padding: 10px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
     @keyframes pulse {
         0% { transform: scale(1); }
         50% { transform: scale(1.1); }
@@ -33,8 +39,87 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# データ・定数定義
+# ボーナスルールの定義
 # ==========================================
+# type: "any" (どれかN個でOK), "all" (全部必要)
+BONUS_RULES = [
+    {
+        "name": "🐮 北海道新幹線好き",
+        "stations": ["札幌", "新小樽", "倶知安", "長万部", "新八雲", "新函館北斗", "木古内", "奥津軽いまべつ", "新青森"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "👹 秋田新幹線好き",
+        "stations": ["秋田", "大曲", "角館", "田沢湖", "雫石", "盛岡"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🍒 山形新幹線好き",
+        "stations": ["新庄", "大石田", "村山", "さくらんぼ東根", "天童", "山形", "かみのやま温泉", "赤湯", "高畠", "米沢", "福島"], # 福岡は福島と解釈
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🚄 東北新幹線好き",
+        "stations": ["新青森", "七戸十和田", "八戸", "二戸", "いわて沼宮内", "盛岡", "新花巻", "北上", "水沢江刺", "一ノ関", "くりこま高原", "古川", "仙台", "白石蔵王", "福島", "郡山", "新白河", "那須塩原", "宇都宮", "小山"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🌾 上越新幹線好き",
+        "stations": ["大宮", "高崎", "上毛高原", "越後湯沢", "浦佐", "長岡", "燕三条", "新潟"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🦀 北陸新幹線好き",
+        "stations": ["安中榛名", "軽井沢", "佐久平", "上田", "長野", "飯山", "上越妙高", "糸魚川", "黒部宇奈月温泉", "富山", "新高岡", "金沢", "小松", "加賀温泉", "福井", "芦原温泉", "越前たけふ", "敦賀"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🗻 東海道新幹線好き",
+        "stations": ["新大阪", "京都", "米原", "岐阜羽島", "名古屋", "三河安城", "豊橋", "浜松", "掛川", "静岡", "新富士", "三島", "熱海", "小田原", "新横浜", "品川", "東京"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🍑 山陽新幹線好き",
+        "stations": ["新神戸", "西明石", "姫路", "相生", "岡山", "新倉敷", "福山", "新尾道", "三原", "東広島", "広島", "新岩国", "徳山", "新山口", "厚狭", "新下関", "小倉"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🕊️ 西九州新幹線好き",
+        "stations": ["新鳥栖", "武雄温泉", "嬉野温泉", "新大村", "諫早", "長崎"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🐻 九州新幹線好き",
+        "stations": ["博多", "新鳥栖", "久留米", "筑後船小屋", "新大牟田", "新玉名", "熊本", "新八代", "新水俣", "出水", "川内", "鹿児島中央"],
+        "type": "any", "threshold": 5, "points": 5
+    },
+    {
+        "name": "🍊 四国制覇",
+        "stations": ["松山", "高知", "高松", "徳島"],
+        "type": "all", "points": 3
+    },
+    {
+        "name": "♨️ 温泉制覇",
+        "stations": ["かみのやま温泉", "黒部宇奈月温泉", "加賀温泉", "芦原温泉", "嬉野温泉", "武雄温泉"],
+        "type": "all", "points": 7
+    },
+    {
+        "name": "⛰️ 「山」がつく駅制覇",
+        "stations": ["村山", "山形", "郡山", "小山", "飯山", "富山", "岡山", "福山", "徳山", "新山口", "松山"],
+        "type": "all", "points": 10
+    },
+    {
+        "name": "🏙️ 大都市制覇",
+        "stations": ["東京", "新大阪", "名古屋"],
+        "type": "all", "points": 3
+    },
+    {
+        "name": "🏁 スタートとゴール",
+        "stations": ["札幌", "東京"],
+        "type": "all", "points": 5
+    }
+]
+
 EVENT_DECK_DATA = [
     {"name": "追加乗車＋", "weight": 15, "desc": "今日はもう少し進もう！\n**サイコロを振って出た目の数だけ進む。**"},
     {"name": "追加乗車ー", "weight": 15, "desc": "今日は少し戻ってみよう...\n**1〜3の好きな数だけ戻る。**"},
@@ -56,6 +141,41 @@ def load_data():
     except FileNotFoundError:
         return None
 
+def calculate_score(player_name, stamp_owners):
+    """
+    プレイヤーの得点と内訳を計算する関数
+    """
+    # プレイヤーが持っているスタンプのリストを取得
+    my_stamps = [s for s, owner in stamp_owners.items() if owner == player_name]
+    
+    # 1. 基本点（スタンプ数）
+    base_score = len(my_stamps)
+    total_score = base_score
+    details = [{"name": "🎫 スタンプ数", "points": base_score}]
+    
+    # 2. ボーナス判定
+    my_stamps_set = set(my_stamps)
+    
+    for rule in BONUS_RULES:
+        target_stations = set(rule["stations"])
+        # 持っているスタンプと、ボーナス対象スタンプの共通部分（マッチした駅）
+        match_stations = my_stamps_set & target_stations
+        match_count = len(match_stations)
+        
+        bonus_points = 0
+        if rule["type"] == "any":
+            if match_count >= rule["threshold"]:
+                bonus_points = rule["points"]
+        elif rule["type"] == "all":
+            if match_count == len(target_stations): # 全て揃っているか
+                bonus_points = rule["points"]
+        
+        if bonus_points > 0:
+            total_score += bonus_points
+            details.append({"name": rule["name"], "points": bonus_points})
+            
+    return total_score, details
+
 df = load_data()
 
 # ==========================================
@@ -63,7 +183,7 @@ df = load_data()
 # ==========================================
 if 'game_started' not in st.session_state:
     st.session_state.game_started = False
-if 'game_ended' not in st.session_state: # ゲーム終了フラグを追加
+if 'game_ended' not in st.session_state:
     st.session_state.game_ended = False
 
 if 'players' not in st.session_state:
@@ -86,7 +206,8 @@ if 'dice_result' not in st.session_state:
     st.session_state.dice_result = None
 if 'current_station_data' not in st.session_state:
     st.session_state.current_station_data = None
-
+if 'used_quiz_indices' not in st.session_state:
+    st.session_state.used_quiz_indices = []
 
 # ==========================================
 # フェーズ1: ゲーム開始前の設定画面
@@ -113,6 +234,7 @@ if not st.session_state.game_started:
                 st.session_state.player_cards = {name: [] for name in player_names}
                 all_stations = df['駅名'].unique()
                 st.session_state.stamp_owners = {station: None for station in all_stations}
+                st.session_state.used_quiz_indices = []
                 st.session_state.game_started = True
                 st.session_state.game_ended = False
                 st.rerun()
@@ -121,40 +243,46 @@ if not st.session_state.game_started:
 # フェーズ3: ゲーム終了画面（優勝発表）
 # ==========================================
 elif st.session_state.game_ended:
-    st.balloons() # 紙吹雪エフェクト！
+    st.balloons()
     
     st.title("🎉 結果発表 🎉")
+    st.write("最終得点（スタンプ数 ＋ ボーナス点）で順位が決まります！")
     
-    # スタンプ集計
-    counts = {p: 0 for p in st.session_state.players}
-    for owner in st.session_state.stamp_owners.values():
-        if owner in counts:
-            counts[owner] += 1
+    # 全員のスコア計算
+    results = []
+    for p in st.session_state.players:
+        score, details = calculate_score(p, st.session_state.stamp_owners)
+        results.append({"player": p, "score": score, "details": details})
     
-    # ランキング作成
-    sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
-    winner_name = sorted_counts[0][0]
-    winner_score = sorted_counts[0][1]
+    # 得点順にソート
+    results.sort(key=lambda x: x["score"], reverse=True)
     
-    # 優勝者表示
-    st.markdown(f"<div class='winner-text'>🏆 優勝 🏆<br>{winner_name} さん！</div>", unsafe_allow_html=True)
-    st.markdown(f"<h3 style='text-align:center;'>獲得スタンプ：{winner_score}枚</h3>", unsafe_allow_html=True)
+    winner = results[0]
+    
+    st.markdown(f"<div class='winner-text'>🏆 優勝 🏆<br>{winner['player']} さん！</div>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align:center;'>獲得スコア：{winner['score']}点</h3>", unsafe_allow_html=True)
     
     st.divider()
     
-    # 全員のランキング表示
-    st.subheader("📊 最終ランキング")
-    for rank, (p, count) in enumerate(sorted_counts, 1):
-        if rank == 1:
-            st.markdown(f"### 🥇 {rank}位: {p} ({count}枚)")
-        elif rank == 2:
-            st.markdown(f"#### 🥈 {rank}位: {p} ({count}枚)")
-        elif rank == 3:
-            st.markdown(f"#### 🥉 {rank}位: {p} ({count}枚)")
-        else:
-            st.write(f"{rank}位: {p} ({count}枚)")
-            
-    st.divider()
+    st.subheader("📊 最終ランキングと内訳")
+    for rank, res in enumerate(results, 1):
+        player_name = res["player"]
+        score = res["score"]
+        
+        # ランク表示
+        medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}位"
+        
+        with st.container():
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.markdown(f"### {medal} {player_name}")
+                st.markdown(f"**合計: {score}点**")
+            with col2:
+                # 内訳をexpanderで表示
+                with st.expander("得点の内訳を見る"):
+                    for d in res["details"]:
+                        st.write(f"・{d['name']}： +{d['points']}点")
+            st.divider()
     
     if st.button("もう一度遊ぶ"):
         st.session_state.clear()
@@ -179,13 +307,12 @@ else:
             st.rerun()
             
         st.write("---")
-        # ゲーム終了ボタン
         if st.button("🏁 ゲーム終了して結果を見る"):
             st.session_state.game_ended = True
             st.rerun()
             
         st.write("---")
-        st.write("📊 **スタンプ獲得数**")
+        st.write("📊 **現在のスタンプ数**")
         counts = {p: 0 for p in st.session_state.players}
         for owner in st.session_state.stamp_owners.values():
             if owner in counts:
@@ -223,10 +350,20 @@ else:
     # タブ2: クイズ
     with tab2:
         st.header("駅のクイズ")
-        st.write("ランダムに問題が出るよ！")
+        st.write("ランダムに問題が出るよ！（同じ問題は出ないようになってるよ）")
         if df is not None:
             if st.button("問題を出題する！", key="quiz_btn"):
-                st.session_state.current_station_data = df.sample(1).iloc[0]
+                all_indices = df.index.tolist()
+                available_indices = [i for i in all_indices if i not in st.session_state.used_quiz_indices]
+                
+                if not available_indices:
+                    st.session_state.used_quiz_indices = [] 
+                    available_indices = all_indices 
+                    st.toast("全問制覇おめでとう！問題がリセットされました♻️") 
+                
+                chosen_index = random.choice(available_indices)
+                st.session_state.used_quiz_indices.append(chosen_index)
+                st.session_state.current_station_data = df.loc[chosen_index]
             
             if st.session_state.current_station_data is not None:
                 station_data = st.session_state.current_station_data
@@ -277,7 +414,6 @@ else:
         st.header("💮 スタンプ帳")
         
         st.subheader("📍 新しいスタンプをゲット！")
-        st.write("まだ誰も持っていないスタンプから検索してゲットできます。")
         available_stations = [s for s, owner in st.session_state.stamp_owners.items() if owner is None]
         
         if available_stations:
@@ -295,7 +431,6 @@ else:
         st.divider()
 
         st.subheader("🎁 スタンプの移動（イベント用）")
-        st.write("イベントでスタンプを渡したり、奪ったりする時はここを使ってね。")
         col_move1, col_move2, col_move3 = st.columns(3)
         with col_move1:
             from_player = st.selectbox("誰から？", st.session_state.players, index=st.session_state.current_player_idx)
