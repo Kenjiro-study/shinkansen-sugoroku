@@ -41,7 +41,6 @@ st.markdown("""
 # ==========================================
 # ボーナスルールの定義
 # ==========================================
-# type: "any" (どれかN個でOK), "all" (全部必要)
 BONUS_RULES = [
     {
         "name": "🐮 北海道新幹線好き",
@@ -55,7 +54,7 @@ BONUS_RULES = [
     },
     {
         "name": "🍒 山形新幹線好き",
-        "stations": ["新庄", "大石田", "村山", "さくらんぼ東根", "天童", "山形", "かみのやま温泉", "赤湯", "高畠", "米沢", "福島"], # 福岡は福島と解釈
+        "stations": ["新庄", "大石田", "村山", "さくらんぼ東根", "天童", "山形", "かみのやま温泉", "赤湯", "高畠", "米沢", "福島"],
         "type": "any", "threshold": 5, "points": 5
     },
     {
@@ -143,23 +142,20 @@ def load_data():
 
 def calculate_score(player_name, stamp_owners):
     """
-    プレイヤーの得点と内訳を計算する関数
+    プレイヤーの得点と内訳（マッチした駅名含む）を計算する関数
     """
-    # プレイヤーが持っているスタンプのリストを取得
     my_stamps = [s for s, owner in stamp_owners.items() if owner == player_name]
     
-    # 1. 基本点（スタンプ数）
     base_score = len(my_stamps)
     total_score = base_score
-    details = [{"name": "🎫 スタンプ数", "points": base_score}]
+    # スタンプ数の内訳にも、何のスタンプを持っているかを記録
+    details = [{"name": "🎫 スタンプ数", "points": base_score, "matched_stations": my_stamps}]
     
-    # 2. ボーナス判定
     my_stamps_set = set(my_stamps)
     
     for rule in BONUS_RULES:
         target_stations = set(rule["stations"])
-        # 持っているスタンプと、ボーナス対象スタンプの共通部分（マッチした駅）
-        match_stations = my_stamps_set & target_stations
+        match_stations = list(my_stamps_set & target_stations)
         match_count = len(match_stations)
         
         bonus_points = 0
@@ -167,14 +163,37 @@ def calculate_score(player_name, stamp_owners):
             if match_count >= rule["threshold"]:
                 bonus_points = rule["points"]
         elif rule["type"] == "all":
-            if match_count == len(target_stations): # 全て揃っているか
+            if match_count == len(target_stations):
                 bonus_points = rule["points"]
         
         if bonus_points > 0:
             total_score += bonus_points
-            details.append({"name": rule["name"], "points": bonus_points})
+            details.append({
+                "name": rule["name"], 
+                "points": bonus_points, 
+                "matched_stations": match_stations # 影響した駅を記録
+            })
             
     return total_score, details
+
+def go_to_next_player():
+    """
+    ゴールしていない次のプレイヤーへ順番を回す関数。
+    全員ゴールしていたらゲーム終了フラグを立てる。
+    """
+    if len(st.session_state.finished_players) >= len(st.session_state.players):
+        st.session_state.game_ended = True
+        return
+        
+    current = st.session_state.current_player_idx
+    for _ in range(len(st.session_state.players)):
+        current = (current + 1) % len(st.session_state.players)
+        if st.session_state.players[current] not in st.session_state.finished_players:
+            st.session_state.current_player_idx = current
+            break
+            
+    st.session_state.dice_result = None
+    st.session_state.current_station_data = None
 
 df = load_data()
 
@@ -192,6 +211,8 @@ if 'current_player_idx' not in st.session_state:
     st.session_state.current_player_idx = 0 
 if 'player_cards' not in st.session_state:
     st.session_state.player_cards = {} 
+if 'finished_players' not in st.session_state:
+    st.session_state.finished_players = [] # ゴールした人のリスト
 
 if 'stamp_owners' not in st.session_state:
     if df is not None:
@@ -208,6 +229,7 @@ if 'current_station_data' not in st.session_state:
     st.session_state.current_station_data = None
 if 'used_quiz_indices' not in st.session_state:
     st.session_state.used_quiz_indices = []
+
 
 # ==========================================
 # フェーズ1: ゲーム開始前の設定画面
@@ -235,6 +257,7 @@ if not st.session_state.game_started:
                 all_stations = df['駅名'].unique()
                 st.session_state.stamp_owners = {station: None for station in all_stations}
                 st.session_state.used_quiz_indices = []
+                st.session_state.finished_players = []
                 st.session_state.game_started = True
                 st.session_state.game_ended = False
                 st.rerun()
@@ -248,15 +271,12 @@ elif st.session_state.game_ended:
     st.title("🎉 結果発表 🎉")
     st.write("最終得点（スタンプ数 ＋ ボーナス点）で順位が決まります！")
     
-    # 全員のスコア計算
     results = []
     for p in st.session_state.players:
         score, details = calculate_score(p, st.session_state.stamp_owners)
         results.append({"player": p, "score": score, "details": details})
     
-    # 得点順にソート
     results.sort(key=lambda x: x["score"], reverse=True)
-    
     winner = results[0]
     
     st.markdown(f"<div class='winner-text'>🏆 優勝 🏆<br>{winner['player']} さん！</div>", unsafe_allow_html=True)
@@ -268,8 +288,6 @@ elif st.session_state.game_ended:
     for rank, res in enumerate(results, 1):
         player_name = res["player"]
         score = res["score"]
-        
-        # ランク表示
         medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}位"
         
         with st.container():
@@ -278,10 +296,17 @@ elif st.session_state.game_ended:
                 st.markdown(f"### {medal} {player_name}")
                 st.markdown(f"**合計: {score}点**")
             with col2:
-                # 内訳をexpanderで表示
                 with st.expander("得点の内訳を見る"):
                     for d in res["details"]:
-                        st.write(f"・{d['name']}： +{d['points']}点")
+                        # 影響した駅のリストを文字列にする
+                        if d['matched_stations']:
+                            matched_str = "、".join(d['matched_stations'])
+                        else:
+                            matched_str = "なし"
+                        
+                        st.write(f"・{d['name']}： **+{d['points']}点**")
+                        # その下に小さく影響した駅名を表示
+                        st.markdown(f"<span style='color:#666; font-size:14px;'>　({matched_str})</span>", unsafe_allow_html=True)
             st.divider()
     
     if st.button("もう一度遊ぶ"):
@@ -297,18 +322,27 @@ else:
     # --- サイドバー ---
     with st.sidebar:
         st.title("🎮 進行状況")
-        st.info(f"今は\n\n**{current_player}**\n\nさんの番です")
         
+        st.write("▼ 参加プレイヤー")
+        for p in st.session_state.players:
+            if p in st.session_state.finished_players:
+                st.write(f"🎉 **{p}** <span style='color:#888;'>(ゴール済み)</span>", unsafe_allow_html=True)
+            elif p == current_player:
+                st.write(f"👉 **{p}**")
+            else:
+                st.write(f"　 {p}")
+                
         st.write("---")
+        
         if st.button("次のプレイヤーへ交代 ⏭️"):
-            st.session_state.current_player_idx = (st.session_state.current_player_idx + 1) % len(st.session_state.players)
-            st.session_state.dice_result = None
-            st.session_state.current_station_data = None
+            go_to_next_player()
             st.rerun()
             
-        st.write("---")
-        if st.button("🏁 ゲーム終了して結果を見る"):
-            st.session_state.game_ended = True
+        # ★追加：ゴールボタン
+        if st.button("🏁 ゴール！（上がり）"):
+            st.session_state.finished_players.append(current_player)
+            st.success(f"🎉 {current_player} さんがゴールしました！")
+            go_to_next_player() # ゴールしたら自動で次の人へ
             st.rerun()
             
         st.write("---")
@@ -321,11 +355,15 @@ else:
         for p, count in sorted_counts:
             marker = "👉" if p == current_player else "　"
             st.write(f"{marker} **{p}**: {count}枚")
-        
+            
         st.write("---")
-        if st.button("ゲームをリセット", type="secondary"):
-             st.session_state.clear()
-             st.rerun()
+        with st.expander("開発者メニュー"):
+            if st.button("強制終了して結果を見る"):
+                st.session_state.game_ended = True
+                st.rerun()
+            if st.button("ゲームをリセット", type="secondary"):
+                st.session_state.clear()
+                st.rerun()
 
     # --- メインエリア ---
     st.title(f"🚄 新幹線すごろく ({current_player}のターン)")
