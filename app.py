@@ -480,8 +480,8 @@ else:
         st.divider()
 
         # 3. 【NEW!】スタンプを戻す（間違えた時用）
-        st.subheader("↩️ スタンプを戻す（間違えた時用）")
-        st.write("間違えて取得してしまったスタンプを、誰のものでもない状態に戻します。")
+        st.subheader("↩️ スタンプを戻す")
+        st.write("間違えてスタンプを取得した場合や一発逆転マスで間違えた場合、指定のスタンプを誰のものでもない状態に戻します。")
         col_ret1, col_ret2, col_ret3 = st.columns(3)
         with col_ret1:
             ret_player = st.selectbox("誰のスタンプ？", st.session_state.players, index=st.session_state.current_player_idx, key="ret_player")
