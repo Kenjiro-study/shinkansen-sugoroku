@@ -141,14 +141,10 @@ def load_data():
         return None
 
 def calculate_score(player_name, stamp_owners):
-    """
-    プレイヤーの得点と内訳（マッチした駅名含む）を計算する関数
-    """
     my_stamps = [s for s, owner in stamp_owners.items() if owner == player_name]
     
     base_score = len(my_stamps)
     total_score = base_score
-    # スタンプ数の内訳にも、何のスタンプを持っているかを記録
     details = [{"name": "🎫 スタンプ数", "points": base_score, "matched_stations": my_stamps}]
     
     my_stamps_set = set(my_stamps)
@@ -171,16 +167,12 @@ def calculate_score(player_name, stamp_owners):
             details.append({
                 "name": rule["name"], 
                 "points": bonus_points, 
-                "matched_stations": match_stations # 影響した駅を記録
+                "matched_stations": match_stations 
             })
             
     return total_score, details
 
 def go_to_next_player():
-    """
-    ゴールしていない次のプレイヤーへ順番を回す関数。
-    全員ゴールしていたらゲーム終了フラグを立てる。
-    """
     if len(st.session_state.finished_players) >= len(st.session_state.players):
         st.session_state.game_ended = True
         return
@@ -204,7 +196,6 @@ if 'game_started' not in st.session_state:
     st.session_state.game_started = False
 if 'game_ended' not in st.session_state:
     st.session_state.game_ended = False
-
 if 'players' not in st.session_state:
     st.session_state.players = [] 
 if 'current_player_idx' not in st.session_state:
@@ -212,15 +203,13 @@ if 'current_player_idx' not in st.session_state:
 if 'player_cards' not in st.session_state:
     st.session_state.player_cards = {} 
 if 'finished_players' not in st.session_state:
-    st.session_state.finished_players = [] # ゴールした人のリスト
-
+    st.session_state.finished_players = [] 
 if 'stamp_owners' not in st.session_state:
     if df is not None:
         all_stations = df['駅名'].unique()
         st.session_state.stamp_owners = {station: None for station in all_stations}
     else:
         st.session_state.stamp_owners = {}
-
 if 'dice_count' not in st.session_state:
     st.session_state.dice_count = 0
 if 'dice_result' not in st.session_state:
@@ -229,7 +218,6 @@ if 'current_station_data' not in st.session_state:
     st.session_state.current_station_data = None
 if 'used_quiz_indices' not in st.session_state:
     st.session_state.used_quiz_indices = []
-
 
 # ==========================================
 # フェーズ1: ゲーム開始前の設定画面
@@ -267,7 +255,6 @@ if not st.session_state.game_started:
 # ==========================================
 elif st.session_state.game_ended:
     st.balloons()
-    
     st.title("🎉 結果発表 🎉")
     st.write("最終得点（スタンプ数 ＋ ボーナス点）で順位が決まります！")
     
@@ -281,7 +268,6 @@ elif st.session_state.game_ended:
     
     st.markdown(f"<div class='winner-text'>🏆 優勝 🏆<br>{winner['player']} さん！</div>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align:center;'>獲得スコア：{winner['score']}点</h3>", unsafe_allow_html=True)
-    
     st.divider()
     
     st.subheader("📊 最終ランキングと内訳")
@@ -298,14 +284,11 @@ elif st.session_state.game_ended:
             with col2:
                 with st.expander("得点の内訳を見る"):
                     for d in res["details"]:
-                        # 影響した駅のリストを文字列にする
                         if d['matched_stations']:
                             matched_str = "、".join(d['matched_stations'])
                         else:
                             matched_str = "なし"
-                        
                         st.write(f"・{d['name']}： **+{d['points']}点**")
-                        # その下に小さく影響した駅名を表示
                         st.markdown(f"<span style='color:#666; font-size:14px;'>　({matched_str})</span>", unsafe_allow_html=True)
             st.divider()
     
@@ -322,7 +305,6 @@ else:
     # --- サイドバー ---
     with st.sidebar:
         st.title("🎮 進行状況")
-        
         st.write("▼ 参加プレイヤー")
         for p in st.session_state.players:
             if p in st.session_state.finished_players:
@@ -333,16 +315,14 @@ else:
                 st.write(f"　 {p}")
                 
         st.write("---")
-        
         if st.button("次のプレイヤーへ交代 ⏭️"):
             go_to_next_player()
             st.rerun()
             
-        # ★追加：ゴールボタン
         if st.button("🏁 ゴール！（上がり）"):
             st.session_state.finished_players.append(current_player)
             st.success(f"🎉 {current_player} さんがゴールしました！")
-            go_to_next_player() # ゴールしたら自動で次の人へ
+            go_to_next_player() 
             st.rerun()
             
         st.write("---")
@@ -451,14 +431,18 @@ else:
     with tab4:
         st.header("💮 スタンプ帳")
         
+        # 1. 新しいスタンプをゲット
         st.subheader("📍 新しいスタンプをゲット！")
         available_stations = [s for s, owner in st.session_state.stamp_owners.items() if owner is None]
         
         if available_stations:
             col_get1, col_get2 = st.columns([3, 1])
             with col_get1:
-                target_station = st.selectbox("駅を選択（文字入力で検索できます）", available_stations)
+                target_station = st.selectbox("駅を選択（文字入力で検索できます）", available_stations, key="get_station_select")
             with col_get2:
+                # ボタンの縦位置を揃えるための空行
+                st.write("")
+                st.write("")
                 if st.button("ゲットする！", key="get_stamp"):
                     st.session_state.stamp_owners[target_station] = current_player
                     st.success(f"やった！ {current_player} が「{target_station}」のスタンプをゲットした！")
@@ -468,20 +452,22 @@ else:
 
         st.divider()
 
+        # 2. スタンプの移動（イベント用）
         st.subheader("🎁 スタンプの移動（イベント用）")
         col_move1, col_move2, col_move3 = st.columns(3)
         with col_move1:
-            from_player = st.selectbox("誰から？", st.session_state.players, index=st.session_state.current_player_idx)
+            from_player = st.selectbox("誰から？", st.session_state.players, index=st.session_state.current_player_idx, key="move_from")
         from_player_stamps = [s for s, owner in st.session_state.stamp_owners.items() if owner == from_player]
         with col_move2:
             if from_player_stamps:
-                move_station = st.selectbox("どのスタンプを？", from_player_stamps)
+                move_station = st.selectbox("どのスタンプを？", from_player_stamps, key="move_station")
             else:
                 move_station = None
                 st.warning("スタンプを持っていません")
         with col_move3:
-            to_player = st.selectbox("誰へ？", st.session_state.players)
-        if st.button("スタンプを移動させる"):
+            to_player = st.selectbox("誰へ？", st.session_state.players, key="move_to")
+            
+        if st.button("スタンプを移動させる", key="move_btn"):
             if move_station and from_player != to_player:
                 st.session_state.stamp_owners[move_station] = to_player
                 st.success(f"「{move_station}」のスタンプが {from_player} から {to_player} に移動しました！")
@@ -492,6 +478,34 @@ else:
                 st.error("移動できるスタンプがありません")
 
         st.divider()
+
+        # 3. 【NEW!】スタンプを戻す（間違えた時用）
+        st.subheader("↩️ スタンプを戻す（間違えた時用）")
+        st.write("間違えて取得してしまったスタンプを、誰のものでもない状態に戻します。")
+        col_ret1, col_ret2, col_ret3 = st.columns(3)
+        with col_ret1:
+            ret_player = st.selectbox("誰のスタンプ？", st.session_state.players, index=st.session_state.current_player_idx, key="ret_player")
+        ret_player_stamps = [s for s, owner in st.session_state.stamp_owners.items() if owner == ret_player]
+        with col_ret2:
+            if ret_player_stamps:
+                ret_station = st.selectbox("どのスタンプを戻す？", ret_player_stamps, key="ret_station")
+            else:
+                ret_station = None
+                st.warning("スタンプを持っていません")
+        with col_ret3:
+            st.write("")
+            st.write("")
+            if st.button("元に戻す", key="return_btn"):
+                if ret_station:
+                    st.session_state.stamp_owners[ret_station] = None
+                    st.success(f"「{ret_station}」のスタンプを元に戻しました！")
+                    st.rerun()
+                else:
+                    st.error("戻せるスタンプがありません")
+
+        st.divider()
+        
+        # 4. みんなのスタンプ状況
         st.subheader("📊 みんなのスタンプ状況")
         for p in st.session_state.players:
             p_stamps = [s for s, owner in st.session_state.stamp_owners.items() if owner == p]
