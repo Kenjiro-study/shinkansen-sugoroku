@@ -48,3 +48,7 @@
 優勝者名や各プレイヤーのランキング, 得点の内訳などを見ることができます.
 「もう一度遊ぶ」ボタンを押すとセットアップ画面に戻ります.
 アプリの使用を終了する場合は, タブを消すだけでOKです.
+
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
+Copyright (c) 2026 [Kenjiro Morimoto]
